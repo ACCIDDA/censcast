@@ -1,0 +1,30 @@
+Package: censcast
+Title: Hospital Census Forecasts from Hubverse Admission Forecasts
+Version: 0.1.0
+Authors@R:
+    person("Cyril", "Geismar", email = "cyrilgeismar@gmail.com",
+           role = c("aut", "cre"))
+Description: Convolves hubverse-format admission quantile forecasts with
+    a length-of-stay distribution to produce hubverse-format census
+    quantile forecasts. Optional WIS scoring via 'scoringutils'.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports:
+    dplyr,
+    ggplot2,
+    purrr,
+    rlang,
+    scoringutils,
+    stats,
+    tidyr
+Suggests:
+    hubData,
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+VignetteBuilder: knitr
+URL: https://github.com/cyrilgeismar/censcast
+BugReports: https://github.com/cyrilgeismar/censcast/issues
