@@ -19,8 +19,10 @@ forecast (weeks for FluSight, days for daily hubs).}
 Numeric vector of length \code{max_stay + 1}.
 }
 \description{
-Returns \code{P(LOS > d)} for \code{d = 0, 1, ..., max_stay}. Pick a family
+Returns \code{P(LOS > d)} for \verb{d = 0, 1, ..., max_stay}. Pick a family
 and pass its parameters via \code{...}:
+}
+\details{
 \itemize{
 \item \code{negbin}    — \code{mu}, \code{k}
 \item \code{normal}    — \code{mu}, \code{sigma}

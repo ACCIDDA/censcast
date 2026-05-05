@@ -2,8 +2,13 @@
 ^\.Rproj\.user$
 ^\.github$
 ^README\.Rmd$
+^README\.html$
+^data-raw$
 ^LICENSE\.md$
 ^draft\.r$
 ^draft\.R$
 ^doc$
 ^Meta$
+^_pkgdown\.yml$
+^docs$
+^pkgdown$

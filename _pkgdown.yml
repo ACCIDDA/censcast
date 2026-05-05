@@ -1,0 +1,14 @@
+url: https://accidda.github.io/censcast/
+template:
+  bootstrap: 5
+  bslib:
+    bootswatch: lux
+    pkgdown-nav-height: 100px
+  logo:
+    height: 250px
+repo:
+  url:
+     home: https://github.com/ACCIDDA/censcast/
+     issue: https://github.com/ACCIDDA/censcast/issues
+     user: https://github.com/ACCIDDA
+     source: htttps://github.com/ACCIDDA/censcast/blob/main

@@ -5,14 +5,22 @@
 \alias{censcast}
 \alias{censcast-package}
 \title{censcast: hospital census forecasts from hubverse admission forecasts}
+\description{
+\if{html}{\figure{logo.png}{options: style='float: right' alt='logo' width='120'}}
+
+Convolves hubverse-format admission quantile forecasts with a length-of-stay distribution to produce hubverse-format census quantile forecasts. Optional WIS scoring via 'scoringutils'.
+}
 \seealso{
 Useful links:
 \itemize{
-\item \url{https://github.com/cyrilgeismar/censcast}
-\item Report bugs at \url{https://github.com/cyrilgeismar/censcast/issues}
+  \item \url{https://github.com/cyrilgeismar/censcast}
+  \item \url{https://accidda.github.io/censcast/}
+  \item Report bugs at \url{https://github.com/cyrilgeismar/censcast/issues}
 }
+
 }
 \author{
 \strong{Maintainer}: Cyril Geismar \email{cyrilgeismar@gmail.com}
+
 }
 \keyword{internal}

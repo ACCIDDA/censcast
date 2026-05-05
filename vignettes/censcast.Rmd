@@ -1,114 +1,102 @@
 ---
-title: "Forecast hospital census from hubverse admission forecasts"
+title: "Forecast hospital census from forecasting hubs"
 output: rmarkdown::html_vignette
 vignette: >
-  %\VignetteIndexEntry{Forecast hospital census from hubverse admission forecasts}
+  %\VignetteIndexEntry{Forecast hospital census from forecasting hubs}
   %\VignetteEngine{knitr::rmarkdown}
   %\VignetteEncoding{UTF-8}
 ---
 
 ```{r, include = FALSE}
-knitr::opts_chunk$set(collapse = TRUE, comment = "#>", eval = FALSE)
+knitr::opts_chunk$set(
+  collapse = TRUE, comment = "#>",
+  fig.width = 7, fig.height = 4,
+  message = FALSE, warning = FALSE
+)
 ```
 
 Public-health forecasting hubs (FluSight, COVIDhub, RSVhub) publish
 **admission** forecasts. Hospital operations plan around the
 **census**, the number of patients in hospital on a given day.
 
-`censcast` transforms hubverse admission forecasts into census
+`censcast` transforms `hubverse` admission forecasts into census
 forecasts by convolving them with a length-of-stay (LOS) distribution.
 The result lands back in the hubverse quantile-forecast schema.
 
 ## The model
 
-If $P(\text{LOS} > d)$ is the probability that a patient is still in
-hospital $d$ time-steps after admission, then today's census is past
-admissions weighted by their probability of still being here:
+Let $P(\text{LOS} > d)$ be the probability that a patient is still in
+hospital $d$ time-steps after admission. Today's census is the sum of
+past admissions, each weighted by their probability of still being here:
 
 $$
-\text{census}(t) \;=\; \sum_{s \le t} \text{admissions}(s) \cdot
-P(\text{LOS} > t - s).
+\text{census}(t) \;=\; \sum_{d \ge 0} \text{admissions}(t - d) \cdot
+P(\text{LOS} > d).
 $$
-
-Apply this convolution to each quantile of a hubverse admission
-forecast and you get a hubverse census forecast: same schema in,
-same schema out.
 
 ## Pipeline
 
 You bring three things, all in standard hubverse shape:
 
-* an admission quantile forecast — `hubData::collect_hub()`;
+* an admission quantile forecast (`hubData::collect_hub()`);
 * observed admissions covering the `max_stay` window before the
-  forecast starts — `hubData::connect_target_timeseries()`. Census
-  on day one depends on patients admitted before it, so the
-  convolution needs that history to start from;
-* a LOS distribution — `los_spec()`. Bring values from literature,
-  hospital records, or a separate fitting pipeline.
+  forecast (`hubData::connect_target_timeseries()`);
+* a LOS distribution (`los_spec()`).
 
-```{r}
-library(censcast)
+In production, the first two come from a hub:
+
+```{r, eval = FALSE}
 library(hubData)
-library(tidyverse)
-
-max_stay <- 3 # weeks
-start_date  <- Sys.Date() - 100
-burnin_date <- start_date - max_stay * 7   # earliest history date needed
-los <- los_spec("negbin", mu = 0.6, k = 1.7, max_stay = max_stay)
 
 admission_fc <- connect_hub(s3_bucket("cdcepi-flusight-forecast-hub")) |>
-  filter(
-    target         == "wk inc flu hosp",
-    output_type    == "quantile",
-    model_id       == "FluSight-ensemble",
-    reference_date >= start_date
-  ) |>
+  dplyr::filter(target == "wk inc flu hosp",
+                output_type == "quantile",
+                model_id    == "FluSight-ensemble") |>
   collect_hub()
 
 admission_hist <- connect_target_timeseries(
   s3_bucket("cdcepi-flusight-forecast-hub")
 ) |>
-  filter(
-    target          == "wk inc flu hosp",
-    target_end_date >= burnin_date
-  ) |>
-  collect()
+  dplyr::filter(target == "wk inc flu hosp") |>
+  dplyr::collect()
+```
 
-census_fc <- admission_fc |>
-  fcast_census(los = los, history = admission_hist)
+For this vignette we use the toy datasets `flu_forecast` and
+`flu_history` shipped with the package:
 
-plot_fan(census_fc, location = "US")
+```{r demo}
+library(censcast)
+library(tidyverse)
+
+los <- los_spec("negbin", mu = 2, k = 1.7, max_stay = 8)
+
+census_fc <- fcast_census(flu_forecast, los, flu_history)
+plot_fan(census_fc)
 ```
 
 ## Comparing LOS assumptions
 
-Without ground-truth census, LOS is the dominant assumption. The
-principled response is to run several specs and compare. Tag each run
-with a label and bind:
+Without ground-truth census, LOS is the dominant assumption. Run
+several specs and compare:
 
-```{r}
-library(purrr)
-
+```{r compare-los}
 los_specs <- list(
-  "short (mu=0.3w)" = los_spec("negbin", mu = 0.3, k = 1.7, max_stay = max_stay),
-  "med (mu=1w)"     = los_spec("negbin", mu = 1,   k = 1.7, max_stay = max_stay),
-  "long (mu=3w)"    = los_spec("negbin", mu = 3,   k = 1.7, max_stay = max_stay)
+  "short (mu=0.5w)" = los_spec("negbin", mu = 0.5, k = 1.7, max_stay = 8),
+  "med (mu=2w)"     = los_spec("negbin", mu = 2,   k = 1.7, max_stay = 8),
+  "long (mu=4w)"    = los_spec("negbin", mu = 4,   k = 1.7, max_stay = 8)
 )
 
 census_runs <- imap(los_specs, \(los, name) {
-  admission_fc |>
-    fcast_census(los = los, history = admission_hist) |>
-    mutate(los = name)
-}) |>
-  bind_rows()
+  fcast_census(flu_forecast, los, flu_history) |> mutate(los = name)
+}) |> bind_rows()
 
-plot_fan(census_runs, location = "US") +
-  facet_wrap(~ los, ncol = 1, scales = "free_y")
+plot_fan(census_runs) +
+  facet_wrap(~ los, ncol = 1)+
+  labs( y = "Census")
 ```
 
-`plot_fan()` treats any column it doesn't recognise as a trajectory
-grouper, so the user-added `los` column needs no configuration.
-
+`plot_fan()` treats any unrecognised column as a trajectory grouper,
+so the user-added `los` column needs no configuration.
 
 ## Scoring
 
@@ -117,13 +105,12 @@ score you bring your own. It needs the standard hubverse target-data
 columns: `target_end_date`, `target`, `location`, `observation`.
 
 The demo below fakes one by convolving observed admissions with a
-"true" LOS. In real use, replace `observed_census` with your
-observed-census source.
+"true" LOS:
 
-```{r}
-true_los <- los_spec("negbin", mu = 0.6, k = 1.7, max_stay = max_stay)
+```{r scoring}
+true_los <- los_spec("negbin", mu = 2, k = 1.7, max_stay = 8)
 
-observed_census <- admission_hist |>
+observed_census <- flu_history |>
   arrange(location, target_end_date) |>
   group_by(location) |>
   mutate(observation = stats::convolve(observation, rev(true_los),
@@ -131,18 +118,10 @@ observed_census <- admission_hist |>
   ungroup()
 
 scores_by_los <- imap(los_specs, \(los, name) {
-  admission_fc |>
-    fcast_census(los = los, history = admission_hist) |>
+  fcast_census(flu_forecast, los, flu_history) |>
     score_census(truth = observed_census) |>
     mutate(los = name)
 }) |> bind_rows()
-
-scores_by_los |>
-  summarise(wis = mean(wis), .by = c(los, horizon)) |>
-  ggplot(aes(horizon, wis, color = los)) +
-  geom_line(linewidth = 0.7) + 
-  geom_point() +
-  theme_bw()
 
 scores_by_los |>
   summarise(across(c(overprediction, underprediction, dispersion), mean),
@@ -153,9 +132,9 @@ scores_by_los |>
   facet_wrap(~ los) +
   scale_fill_brewer(palette = "Set2") +
   labs(x = "Horizon (weeks)", y = "Mean WIS") +
-  theme_bw()
-```
+  theme_classic()
 
+```
 
 ## API
 
@@ -165,5 +144,3 @@ scores_by_los |>
 | `fcast_census()` | Convolve hubverse admissions × LOS → hubverse census. |
 | `plot_fan()`     | Quantile fan chart, returns a `ggplot`. |
 | `score_census()` | Score against observed census via `scoringutils`. |
-
-
