@@ -1,0 +1,9 @@
+pandoc: 3.8.3
+pkgdown: 2.2.0
+pkgdown_sha: ~
+articles:
+  censcast: censcast.html
+last_built: 2026-05-05T16:43Z
+urls:
+  reference: https://accidda.github.io/censcast/reference
+  article: https://accidda.github.io/censcast/articles
