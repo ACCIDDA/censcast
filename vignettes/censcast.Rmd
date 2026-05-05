@@ -66,7 +66,10 @@ For this vignette we use the toy datasets `flu_forecast` and
 
 ```{r demo}
 library(censcast)
-library(tidyverse)
+library(dplyr)
+library(purrr)
+library(tidyr)
+library(ggplot2)
 
 los <- los_spec("negbin", mu = 2, k = 1.7, max_stay = 8)
 

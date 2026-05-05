@@ -26,7 +26,10 @@ Suggests:
     hubData,
     knitr,
     rmarkdown,
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    tibble
+Remotes:
+    hubverse-org/hubData
 Config/testthat/edition: 3
 VignetteBuilder: knitr
 URL: https://github.com/cyrilgeismar/censcast, https://accidda.github.io/censcast/
