@@ -4,22 +4,36 @@
 \alias{fcast_census}
 \title{Forecast census from a hubverse admission forecast}
 \usage{
-fcast_census(forecast, los, history)
+fcast_census(admission_fcast, los, admission_history)
 }
 \arguments{
-\item{forecast}{Hubverse model-output tibble (from
-\code{\link[hubData:collect_hub]{hubData::collect_hub()}}).}
+\item{admission_fcast}{Hubverse model output tibble of admission
+quantile forecasts (output of \code{hubData::collect_hub()}). One row
+per (model, location, reference_date, horizon, quantile).}
 
-\item{los}{Numeric survival vector \code{P(LOS > d)}, e.g. from
-\code{\link[=los_spec]{los_spec()}}.}
+\item{los}{Numeric survival vector \code{P(LOS > d)} of length
+\code{max_stay + 1}. Use \code{\link[=spec_los]{spec_los()}} for literature priors or
+\code{\link[=fit_los]{fit_los()}} for a data driven fit.}
 
-\item{history}{Hubverse target time-series tibble (from
-\code{\link[hubData:connect_target_timeseries]{hubData::connect_target_timeseries()}} then collected) — used as
-burn-in admissions before each forecast.}
+\item{admission_history}{Hubverse target time series tibble of
+observed admissions (output of
+\code{hubData::connect_target_timeseries()} then collected). Must
+cover at least \code{max_stay} time steps immediately before each
+\code{reference_date} in \code{admission_fcast}.}
 }
 \value{
-Same hubverse columns as \code{forecast}, with \code{value} now census.
+A tibble with the same hubverse columns as \code{admission_fcast},
+with \code{value} now representing census instead of admissions.
 }
 \description{
-Forecast census from a hubverse admission forecast
+Convolves a hubverse admission quantile forecast with a length of
+stay survival vector to produce a hubverse census quantile forecast.
+}
+\details{
+Census on the first forecast day depends on admissions before the
+forecast starts, because patients already in hospital are still
+occupying beds. \code{admission_history} supplies those pre forecast
+admissions so the convolution can see the full \code{max_stay} window.
+Groups with fewer than \code{max_stay} historical observations before
+their \code{reference_date} are dropped silently.
 }

@@ -36,7 +36,7 @@ make_forecast <- function(loc = "X",
 }
 
 test_that("fcast_census preserves hubverse columns", {
-  los <- los_spec("geometric", mu = 1.5, max_stay = 8)
+  los <- spec_los("geometric", mu = 1.5, max_stay = 8)
   out <- fcast_census(make_forecast(), los, make_history())
   expect_named(
     out,
@@ -48,7 +48,7 @@ test_that("fcast_census preserves hubverse columns", {
 })
 
 test_that("fcast_census matches a manual convolution per quantile", {
-  los  <- los_spec("geometric", mu = 1.5, max_stay = 8)
+  los  <- spec_los("geometric", mu = 1.5, max_stay = 8)
   hist <- make_history(n = 30)
   fc   <- make_forecast(q_levels = 0.5, value_fun = function(q) 120)
 
@@ -61,14 +61,14 @@ test_that("fcast_census matches a manual convolution per quantile", {
 })
 
 test_that("fcast_census drops groups with insufficient history", {
-  los  <- los_spec("negbin", mu = 0.5, k = 1, max_stay = 50)
+  los  <- spec_los("negbin", mu = 0.5, k = 1, max_stay = 50)
   hist <- make_history(n = 5)
   out  <- fcast_census(make_forecast(), los, hist)
   expect_equal(nrow(out), 0)
 })
 
 test_that("fcast_census handles multiple locations independently", {
-  los  <- los_spec("geometric", mu = 1.5, max_stay = 8)
+  los  <- spec_los("geometric", mu = 1.5, max_stay = 8)
   hist <- dplyr::bind_rows(
     make_history("X", lambda = 100),
     make_history("Y", lambda = 200)

@@ -4,19 +4,21 @@
 \alias{score_census}
 \title{Score a census forecast against observed census}
 \usage{
-score_census(census_fc, truth)
+score_census(census_fcast, census_truth)
 }
 \arguments{
-\item{census_fc}{Hubverse-format census forecast (output of
-\code{\link[=fcast_census]{fcast_census()}}).}
+\item{census_fcast}{Hubverse format census quantile forecast (output
+of \code{\link[=fcast_census]{fcast_census()}}).}
 
-\item{truth}{Hubverse target-data tibble of observed census
-(\code{target_end_date}, \code{target}, \code{location}, \code{observation}).}
+\item{census_truth}{Hubverse target data tibble of observed census,
+with columns \code{target_end_date}, \code{target}, \code{location}, \code{observation}.}
 }
 \value{
-A \code{scoringutils} scored tibble.
+A \code{scoringutils} scored tibble, one row per (location,
+reference_date, target_end_date, quantile).
 }
 \description{
-Joins on \verb{(location, target_end_date)} and scores via
-\code{\link[scoringutils:score]{scoringutils::score()}}.
+Joins forecast quantiles to truth on \verb{(location, target_end_date)}
+and scores them with \code{\link[scoringutils:score]{scoringutils::score()}}. Returns the standard
+\code{scoringutils} per row score tibble (WIS components, coverage, etc.).
 }

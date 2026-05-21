@@ -4,24 +4,31 @@
 \alias{plot_fan}
 \title{Fan chart of a hubverse quantile forecast}
 \usage{
-plot_fan(x, location = NULL, truth = NULL, intervals = c(0.5, 0.95))
+plot_fan(fcast, location = NULL, truth = NULL, intervals = c(0.5, 0.95))
 }
 \arguments{
-\item{x}{Hubverse-format quantile tibble.}
+\item{fcast}{Hubverse format quantile tibble. Typically the
+output of \code{\link[=fcast_census]{fcast_census()}}, but any admission or census quantile
+forecast in hubverse shape works.}
 
-\item{location}{Optional location to filter on.}
+\item{location}{Optional character. If supplied, both \code{fcast}
+and \code{truth} are filtered to this location before plotting.}
 
-\item{truth}{Optional hubverse target-data tibble to overlay in black.}
+\item{truth}{Optional hubverse target data tibble (columns
+\code{target_end_date}, \code{target}, \code{location}, \code{observation}).
+Overlaid as a black line.}
 
-\item{intervals}{Prediction-interval widths in \verb{(0, 1)}. Default
-\code{c(0.5, 0.95)}.}
+\item{intervals}{Numeric vector of prediction interval widths in
+\verb{(0, 1)}. Default \code{c(0.5, 0.95)}. One ribbon per interval.}
 }
 \value{
-A \code{ggplot}.
+A \code{ggplot} object.
 }
 \description{
-Returns a ggplot of prediction-interval ribbons + median line.
-Any column not in the hubverse data triplet (\code{target_end_date},
-\code{horizon}, \verb{output_type*}, \code{value}) is treated as a trajectory
-grouper, so user-added columns like \code{los} work out of the box.
+Renders prediction interval ribbons plus the median as a ggplot.
+Works on any hubverse quantile forecast, whether the values are
+admissions or census. Any column not in the hubverse value triplet
+(\code{target_end_date}, \code{horizon}, \verb{output_type*}, \code{value}) is treated
+as a trajectory grouper, so user added columns like \code{los} need no
+configuration.
 }
