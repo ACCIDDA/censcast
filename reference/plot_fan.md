@@ -1,34 +1,40 @@
 # Fan chart of a hubverse quantile forecast
 
-Returns a ggplot of prediction-interval ribbons + median line. Any
-column not in the hubverse data triplet (`target_end_date`, `horizon`,
-`output_type*`, `value`) is treated as a trajectory grouper, so
-user-added columns like `los` work out of the box.
+Renders prediction interval ribbons plus the median as a ggplot. Works
+on any hubverse quantile forecast, whether the values are admissions or
+census. Any column not in the hubverse value triplet (`target_end_date`,
+`horizon`, `output_type*`, `value`) is treated as a trajectory grouper,
+so user added columns like `los` need no configuration.
 
 ## Usage
 
 ``` r
-plot_fan(x, location = NULL, truth = NULL, intervals = c(0.5, 0.95))
+plot_fan(fcast, location = NULL, truth = NULL, intervals = c(0.5, 0.95))
 ```
 
 ## Arguments
 
-- x:
+- fcast:
 
-  Hubverse-format quantile tibble.
+  Hubverse format quantile tibble. Typically the output of
+  [`fcast_census()`](https://accidda.github.io/censcast/reference/fcast_census.md),
+  but any admission or census quantile forecast in hubverse shape works.
 
 - location:
 
-  Optional location to filter on.
+  Optional character. If supplied, both `fcast` and `truth` are filtered
+  to this location before plotting.
 
 - truth:
 
-  Optional hubverse target-data tibble to overlay in black.
+  Optional hubverse target data tibble (columns `target_end_date`,
+  `target`, `location`, `observation`). Overlaid as a black line.
 
 - intervals:
 
-  Prediction-interval widths in `(0, 1)`. Default `c(0.5, 0.95)`.
+  Numeric vector of prediction interval widths in `(0, 1)`. Default
+  `c(0.5, 0.95)`. One ribbon per interval.
 
 ## Value
 
-A `ggplot`.
+A `ggplot` object.

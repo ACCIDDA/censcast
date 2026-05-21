@@ -12,8 +12,8 @@
 <link rel="icon" sizes="any" href="../favicon.ico">
 <link rel="manifest" href="../site.webmanifest">
 <script src="../deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<link href="../deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
-<script src="../deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
+<link href="../deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
+<script src="../deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="../deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="../deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
 <script src="../deps/headroom-0.11.0/headroom.min.js"></script><script src="../deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="../deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="../deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="../deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="../deps/search-1.0.0/fuse.min.js"></script><script src="../deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="../pkgdown.js"></script><meta property="og:title" content="Forecast hospital census from forecasting hubs">
 </head>
@@ -63,129 +63,160 @@
 
     
     
-<p>Public-health forecasting hubs (FluSight, COVIDhub, RSVhub) publish
+<p>Public health forecasting hubs (FluSight, COVIDhub, RSVhub) publish
 <strong>admission</strong> forecasts. Hospital operations plan around
-the <strong>census</strong>, the number of patients in hospital on a
-given day.</p>
-<p><code>censcast</code> transforms <code>hubverse</code> admission
-forecasts into census forecasts by convolving them with a length-of-stay
-(LOS) distribution. The result lands back in the hubverse
-quantile-forecast schema.</p>
-<div class="section level2">
-<h2 id="the-model">The model<a class="anchor" aria-label="anchor" href="#the-model"></a>
-</h2>
-<p>Let
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mi>P</mi><mo stretchy="false" form="prefix">(</mo><mtext mathvariant="normal">LOS</mtext><mo>&gt;</mo><mi>d</mi><mo stretchy="false" form="postfix">)</mo></mrow><annotation encoding="application/x-tex">P(\text{LOS} &gt; d)</annotation></semantics></math>
-be the probability that a patient is still in hospital
-<math display="inline" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mi>d</mi><annotation encoding="application/x-tex">d</annotation></semantics></math>
-time-steps after admission. Today’s census is the sum of past
-admissions, each weighted by their probability of still being here:</p>
+the <strong>census</strong>: the number of patients in hospital on a
+given day. <code>censcast</code> turns one into the other by convolving
+admissions with a length of stay (LOS) distribution:</p>
 <p><math display="block" xmlns="http://www.w3.org/1998/Math/MathML"><semantics><mrow><mtext mathvariant="normal">census</mtext><mo stretchy="false" form="prefix">(</mo><mi>t</mi><mo stretchy="false" form="postfix">)</mo><mspace width="0.278em"></mspace><mo>=</mo><mspace width="0.278em"></mspace><munder><mo>∑</mo><mrow><mi>d</mi><mo>≥</mo><mn>0</mn></mrow></munder><mtext mathvariant="normal">admissions</mtext><mo stretchy="false" form="prefix">(</mo><mi>t</mi><mo>−</mo><mi>d</mi><mo stretchy="false" form="postfix">)</mo><mo>⋅</mo><mi>P</mi><mo stretchy="false" form="prefix">(</mo><mtext mathvariant="normal">LOS</mtext><mo>&gt;</mo><mi>d</mi><mo stretchy="false" form="postfix">)</mo><mi>.</mi></mrow><annotation encoding="application/x-tex">
 \text{census}(t) \;=\; \sum_{d \ge 0} \text{admissions}(t - d) \cdot
 P(\text{LOS} &gt; d).
 </annotation></semantics></math></p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/cyrilgeismar/censcast" class="external-link">censcast</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://purrr.tidyverse.org/" class="external-link">purrr</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://ggplot2.tidyverse.org" class="external-link">ggplot2</a></span><span class="op">)</span></span></code></pre></div>
+<div class="section level2">
+<h2 id="what-the-hubverse-gives-you">What the hubverse gives you<a class="anchor" aria-label="anchor" href="#what-the-hubverse-gives-you"></a>
+</h2>
+<p>Two tibbles in standard hubverse shape, both shipped with the package
+as toy data for this vignette:</p>
+<ul>
+<li>
+<code>admission_history</code>: observed weekly admissions, as you
+would pull from a hub’s target time series
+(<code><a href="https://hubverse-org.github.io/hubData/reference/connect_target_timeseries.html" class="external-link">hubData::connect_target_timeseries()</a></code>).</li>
+<li>
+<code>admission_forecast</code>: the next 4 weeks of admission
+quantile forecasts, as you would pull from a hub
+(<code>hubData::connect_hub() |&gt; collect_hub()</code>).</li>
+</ul>
+<p>Overlaying the two on one axis shows what a hub publishes: history in
+black, forecast fan in blue.</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="../reference/plot_fan.html">plot_fan</a></span><span class="op">(</span><span class="va">admission_forecast</span>, truth <span class="op">=</span> <span class="va">admission_history</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>y <span class="op">=</span> <span class="st">"Weekly admissions"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="censcast_files/figure-html/inputs-1.png" class="r-plt" alt="" width="672"></p>
+<p><code>censcast</code> gives two ways to turn this into a
+<em>census</em> forecast, depending on whether you have past census
+data.</p>
 </div>
 <div class="section level2">
-<h2 id="pipeline">Pipeline<a class="anchor" aria-label="anchor" href="#pipeline"></a>
+<h2 id="with-past-census-data-fit_los">1. With past census data: <code>fit_los()</code><a class="anchor" aria-label="anchor" href="#with-past-census-data-fit_los"></a>
 </h2>
-<p>You bring three things, all in standard hubverse shape:</p>
-<ul>
-<li>an admission quantile forecast
-(<code><a href="https://hubverse-org.github.io/hubData/reference/collect_hub.html" class="external-link">hubData::collect_hub()</a></code>);</li>
-<li>observed admissions covering the <code>max_stay</code> window before
-the forecast (<code><a href="https://hubverse-org.github.io/hubData/reference/connect_target_timeseries.html" class="external-link">hubData::connect_target_timeseries()</a></code>);</li>
-<li>a LOS distribution (<code><a href="../reference/los_spec.html">los_spec()</a></code>).</li>
-</ul>
-<p>In production, the first two come from a hub:</p>
-<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<p>Hubs publish admissions truth, not census truth, so the census series
+has to come from your own records. The package ships a toy version,
+<code>census_history</code>, generated by convolving
+<code>admission_history</code> with a known LOS, so it pairs row for row
+with the admission series.</p>
+<p><code><a href="../reference/fit_los.html">fit_los()</a></code> recovers the LOS by deconvolving the paired
+admission and census time series:</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fit_los.html">fit_los</a></span><span class="op">(</span></span>
+<span>  data <span class="op">=</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate-joins.html" class="external-link">inner_join</a></span><span class="op">(</span></span>
+<span>    <span class="va">admission_history</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="va">target_end_date</span>, admissions <span class="op">=</span> <span class="va">observation</span><span class="op">)</span>,</span>
+<span>    <span class="va">census_history</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/select.html" class="external-link">select</a></span><span class="op">(</span><span class="va">target_end_date</span>, census <span class="op">=</span> <span class="va">observation</span><span class="op">)</span>,</span>
+<span>    by <span class="op">=</span> <span class="st">"target_end_date"</span></span>
+<span>  <span class="op">)</span>,</span>
+<span>  family <span class="op">=</span> <span class="st">"negbin"</span>,</span>
+<span>  max_stay <span class="op">=</span> <span class="fl">8</span></span>
+<span><span class="op">)</span></span>
+<span><span class="va">fit</span></span>
+<span><span class="co">#&gt; &lt;los_fit&gt; family=negbin  mu=2, k=1.7  P(LOS&gt;8) = 0.0134</span></span></code></pre></div>
+<p><code>plot(fit)</code> shows the recovered survival curve:</p>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/graphics/plot.default.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">fit</span><span class="op">)</span></span></code></pre></div>
+<p><img src="censcast_files/figure-html/fit-survival-1.png" class="r-plt" alt="" width="672"></p>
+<p>Drop the fit into <code><a href="../reference/fcast_census.html">fcast_census()</a></code> to get a census
+forecast, then overlay the observed census to check the alignment:</p>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">census_fit</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fcast_census.html">fcast_census</a></span><span class="op">(</span><span class="va">admission_forecast</span>, <span class="va">fit</span>, <span class="va">admission_history</span><span class="op">)</span></span>
+<span><span class="fu"><a href="../reference/plot_fan.html">plot_fan</a></span><span class="op">(</span><span class="va">census_fit</span>, truth <span class="op">=</span> <span class="va">census_history</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>y <span class="op">=</span> <span class="st">"Weekly census"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="censcast_files/figure-html/fit-forecast-1.png" class="r-plt" alt="" width="672"></p>
+</div>
+<div class="section level2">
+<h2 id="without-past-census-data-spec_los">2. Without past census data: <code>spec_los()</code><a class="anchor" aria-label="anchor" href="#without-past-census-data-spec_los"></a>
+</h2>
+<p>If no census data is available, set LOS from literature priors.
+Running several priors makes the assumption visible. Short stays put
+weight on recent admissions; long stays smooth across many weeks:</p>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="va">los_priors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
+<span>  <span class="st">"short (mu=0.5w)"</span> <span class="op">=</span> <span class="fu"><a href="../reference/spec_los.html">spec_los</a></span><span class="op">(</span><span class="st">"negbin"</span>, mu <span class="op">=</span> <span class="fl">0.5</span>, k <span class="op">=</span> <span class="fl">1.7</span>, max_stay <span class="op">=</span> <span class="fl">8</span><span class="op">)</span>,</span>
+<span>  <span class="st">"medium (mu=2w)"</span> <span class="op">=</span> <span class="fu"><a href="../reference/spec_los.html">spec_los</a></span><span class="op">(</span><span class="st">"negbin"</span>, mu <span class="op">=</span> <span class="fl">2</span>, k <span class="op">=</span> <span class="fl">1.7</span>, max_stay <span class="op">=</span> <span class="fl">8</span><span class="op">)</span>,</span>
+<span>  <span class="st">"long (mu=4w)"</span> <span class="op">=</span> <span class="fu"><a href="../reference/spec_los.html">spec_los</a></span><span class="op">(</span><span class="st">"negbin"</span>, mu <span class="op">=</span> <span class="fl">4</span>, k <span class="op">=</span> <span class="fl">1.7</span>, max_stay <span class="op">=</span> <span class="fl">8</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">census_priors</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://purrr.tidyverse.org/reference/imap.html" class="external-link">imap</a></span><span class="op">(</span><span class="va">los_priors</span>, \<span class="op">(</span><span class="va">s</span>, <span class="va">name</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="../reference/fcast_census.html">fcast_census</a></span><span class="op">(</span><span class="va">admission_forecast</span>, <span class="va">s</span>, <span class="va">admission_history</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>los <span class="op">=</span> <span class="va">name</span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/bind_rows.html" class="external-link">bind_rows</a></span><span class="op">(</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Replicate truth across facets so each panel gets the black line.</span></span>
+<span><span class="va">truth_faceted</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://purrr.tidyverse.org/reference/imap.html" class="external-link">imap</a></span><span class="op">(</span><span class="va">los_priors</span>, \<span class="op">(</span><span class="va">s</span>, <span class="va">name</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span><span class="va">census_history</span>, los <span class="op">=</span> <span class="va">name</span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/bind_rows.html" class="external-link">bind_rows</a></span><span class="op">(</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="../reference/plot_fan.html">plot_fan</a></span><span class="op">(</span><span class="va">census_priors</span>, truth <span class="op">=</span> <span class="va">truth_faceted</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/facet_wrap.html" class="external-link">facet_wrap</a></span><span class="op">(</span><span class="op">~</span><span class="va">los</span>, ncol <span class="op">=</span> <span class="fl">1</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>y <span class="op">=</span> <span class="st">"Weekly census"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="censcast_files/figure-html/priors-1.png" class="r-plt" alt="" width="672"></p>
+<p><code><a href="../reference/plot_fan.html">plot_fan()</a></code> treats any unrecognised column as a
+trajectory grouper, so the user added <code>los</code> column needs no
+configuration.</p>
+</div>
+<div class="section level2">
+<h2 id="scoring">3. Scoring<a class="anchor" aria-label="anchor" href="#scoring"></a>
+</h2>
+<p><code><a href="../reference/score_census.html">score_census()</a></code> returns weighted interval score (WIS) per
+quantile via <code>scoringutils</code>. Pair each forecast with the
+truth and compare mean WIS across LOS priors:</p>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://purrr.tidyverse.org/reference/imap.html" class="external-link">imap</a></span><span class="op">(</span><span class="va">los_priors</span>, \<span class="op">(</span><span class="va">s</span>, <span class="va">name</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="../reference/fcast_census.html">fcast_census</a></span><span class="op">(</span><span class="va">admission_forecast</span>, <span class="va">s</span>, <span class="va">admission_history</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="../reference/score_census.html">score_census</a></span><span class="op">(</span>census_truth <span class="op">=</span> <span class="va">census_history</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>los <span class="op">=</span> <span class="va">name</span><span class="op">)</span></span>
+<span><span class="op">}</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/bind_rows.html" class="external-link">bind_rows</a></span><span class="op">(</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/summarise.html" class="external-link">summarise</a></span><span class="op">(</span>mean_wis <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/mean.html" class="external-link">mean</a></span><span class="op">(</span><span class="va">wis</span><span class="op">)</span>, .by <span class="op">=</span> <span class="va">los</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/arrange.html" class="external-link">arrange</a></span><span class="op">(</span><span class="va">mean_wis</span><span class="op">)</span></span>
+<span><span class="co">#&gt;               los  mean_wis</span></span>
+<span><span class="co">#&gt; 1  medium (mu=2w)  29.69379</span></span>
+<span><span class="co">#&gt; 2    long (mu=4w)  76.89364</span></span>
+<span><span class="co">#&gt; 3 short (mu=0.5w) 181.69018</span></span></code></pre></div>
+<p>The “medium” prior matches the LOS used to generate
+<code>census_history</code> (<code>negbin(mu = 2, k = 1.7)</code>), so
+it wins. In a real workflow, lean on <code><a href="../reference/fit_los.html">fit_los()</a></code> when census
+data exists and use <code><a href="../reference/spec_los.html">spec_los()</a></code> priors as a sensitivity
+check.</p>
+</div>
+<div class="section level2">
+<h2 id="plugging-in-a-real-hub">Plugging in a real hub<a class="anchor" aria-label="anchor" href="#plugging-in-a-real-hub"></a>
+</h2>
+<p>The toy datasets above are the only difference between this vignette
+and a production workflow. Swap them for live hub data:</p>
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://hubverse-org.github.io/hubData" class="external-link">hubData</a></span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">admission_fc</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://hubverse-org.github.io/hubData/reference/connect_hub.html" class="external-link">connect_hub</a></span><span class="op">(</span><span class="fu"><a href="https://arrow.apache.org/docs/r/reference/s3_bucket.html" class="external-link">s3_bucket</a></span><span class="op">(</span><span class="st">"cdcepi-flusight-forecast-hub"</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">target</span> <span class="op">==</span> <span class="st">"wk inc flu hosp"</span>,</span>
-<span>                <span class="va">output_type</span> <span class="op">==</span> <span class="st">"quantile"</span>,</span>
-<span>                <span class="va">model_id</span>    <span class="op">==</span> <span class="st">"FluSight-ensemble"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span><span class="va">admission_forecast</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://hubverse-org.github.io/hubData/reference/connect_hub.html" class="external-link">connect_hub</a></span><span class="op">(</span><span class="fu"><a href="https://arrow.apache.org/docs/r/reference/s3_bucket.html" class="external-link">s3_bucket</a></span><span class="op">(</span><span class="st">"cdcepi-flusight-forecast-hub"</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
+<span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span></span>
+<span>    <span class="va">target</span> <span class="op">==</span> <span class="st">"wk inc flu hosp"</span>,</span>
+<span>    <span class="va">output_type</span> <span class="op">==</span> <span class="st">"quantile"</span>,</span>
+<span>    <span class="va">model_id</span> <span class="op">==</span> <span class="st">"FluSight-ensemble"</span></span>
+<span>  <span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu"><a href="https://hubverse-org.github.io/hubData/reference/collect_hub.html" class="external-link">collect_hub</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
-<span><span class="va">admission_hist</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://hubverse-org.github.io/hubData/reference/connect_target_timeseries.html" class="external-link">connect_target_timeseries</a></span><span class="op">(</span></span>
+<span><span class="va">admission_history</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://hubverse-org.github.io/hubData/reference/connect_target_timeseries.html" class="external-link">connect_target_timeseries</a></span><span class="op">(</span></span>
 <span>  <span class="fu"><a href="https://arrow.apache.org/docs/r/reference/s3_bucket.html" class="external-link">s3_bucket</a></span><span class="op">(</span><span class="st">"cdcepi-flusight-forecast-hub"</span><span class="op">)</span></span>
 <span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/filter.html" class="external-link">filter</a></span><span class="op">(</span><span class="va">target</span> <span class="op">==</span> <span class="st">"wk inc flu hosp"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
 <span>  <span class="fu">dplyr</span><span class="fu">::</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/compute.html" class="external-link">collect</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<p>For this vignette we use the toy datasets <code>flu_forecast</code>
-and <code>flu_history</code> shipped with the package:</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/cyrilgeismar/censcast" class="external-link">censcast</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://dplyr.tidyverse.org" class="external-link">dplyr</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://purrr.tidyverse.org/" class="external-link">purrr</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://tidyr.tidyverse.org" class="external-link">tidyr</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://ggplot2.tidyverse.org" class="external-link">ggplot2</a></span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">los</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/los_spec.html">los_spec</a></span><span class="op">(</span><span class="st">"negbin"</span>, mu <span class="op">=</span> <span class="fl">2</span>, k <span class="op">=</span> <span class="fl">1.7</span>, max_stay <span class="op">=</span> <span class="fl">8</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">census_fc</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/fcast_census.html">fcast_census</a></span><span class="op">(</span><span class="va">flu_forecast</span>, <span class="va">los</span>, <span class="va">flu_history</span><span class="op">)</span></span>
-<span><span class="fu"><a href="../reference/plot_fan.html">plot_fan</a></span><span class="op">(</span><span class="va">census_fc</span><span class="op">)</span></span></code></pre></div>
-<p><img src="censcast_files/figure-html/demo-1.png" class="r-plt" alt="" width="672"></p>
-</div>
-<div class="section level2">
-<h2 id="comparing-los-assumptions">Comparing LOS assumptions<a class="anchor" aria-label="anchor" href="#comparing-los-assumptions"></a>
-</h2>
-<p>Without ground-truth census, LOS is the dominant assumption. Run
-several specs and compare:</p>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">los_specs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span></span>
-<span>  <span class="st">"short (mu=0.5w)"</span> <span class="op">=</span> <span class="fu"><a href="../reference/los_spec.html">los_spec</a></span><span class="op">(</span><span class="st">"negbin"</span>, mu <span class="op">=</span> <span class="fl">0.5</span>, k <span class="op">=</span> <span class="fl">1.7</span>, max_stay <span class="op">=</span> <span class="fl">8</span><span class="op">)</span>,</span>
-<span>  <span class="st">"med (mu=2w)"</span>     <span class="op">=</span> <span class="fu"><a href="../reference/los_spec.html">los_spec</a></span><span class="op">(</span><span class="st">"negbin"</span>, mu <span class="op">=</span> <span class="fl">2</span>,   k <span class="op">=</span> <span class="fl">1.7</span>, max_stay <span class="op">=</span> <span class="fl">8</span><span class="op">)</span>,</span>
-<span>  <span class="st">"long (mu=4w)"</span>    <span class="op">=</span> <span class="fu"><a href="../reference/los_spec.html">los_spec</a></span><span class="op">(</span><span class="st">"negbin"</span>, mu <span class="op">=</span> <span class="fl">4</span>,   k <span class="op">=</span> <span class="fl">1.7</span>, max_stay <span class="op">=</span> <span class="fl">8</span><span class="op">)</span></span>
-<span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">census_runs</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://purrr.tidyverse.org/reference/imap.html" class="external-link">imap</a></span><span class="op">(</span><span class="va">los_specs</span>, \<span class="op">(</span><span class="va">los</span>, <span class="va">name</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="../reference/fcast_census.html">fcast_census</a></span><span class="op">(</span><span class="va">flu_forecast</span>, <span class="va">los</span>, <span class="va">flu_history</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>los <span class="op">=</span> <span class="va">name</span><span class="op">)</span></span>
-<span><span class="op">}</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/bind_rows.html" class="external-link">bind_rows</a></span><span class="op">(</span><span class="op">)</span></span>
-<span></span>
-<span><span class="fu"><a href="../reference/plot_fan.html">plot_fan</a></span><span class="op">(</span><span class="va">census_runs</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/facet_wrap.html" class="external-link">facet_wrap</a></span><span class="op">(</span><span class="op">~</span> <span class="va">los</span>, ncol <span class="op">=</span> <span class="fl">1</span><span class="op">)</span><span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span> y <span class="op">=</span> <span class="st">"Census"</span><span class="op">)</span></span></code></pre></div>
-<p><img src="censcast_files/figure-html/compare-los-1.png" class="r-plt" alt="" width="672"></p>
-<p><code><a href="../reference/plot_fan.html">plot_fan()</a></code> treats any unrecognised column as a
-trajectory grouper, so the user-added <code>los</code> column needs no
-configuration.</p>
-</div>
-<div class="section level2">
-<h2 id="scoring">Scoring<a class="anchor" aria-label="anchor" href="#scoring"></a>
-</h2>
-<p>Hubverse hubs publish admissions truth, not census truth, so to score
-you bring your own. It needs the standard hubverse target-data columns:
-<code>target_end_date</code>, <code>target</code>,
-<code>location</code>, <code>observation</code>.</p>
-<p>The demo below fakes one by convolving observed admissions with a
-“true” LOS:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="va">true_los</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/los_spec.html">los_spec</a></span><span class="op">(</span><span class="st">"negbin"</span>, mu <span class="op">=</span> <span class="fl">2</span>, k <span class="op">=</span> <span class="fl">1.7</span>, max_stay <span class="op">=</span> <span class="fl">8</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">observed_census</span> <span class="op">&lt;-</span> <span class="va">flu_history</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/arrange.html" class="external-link">arrange</a></span><span class="op">(</span><span class="va">location</span>, <span class="va">target_end_date</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/group_by.html" class="external-link">group_by</a></span><span class="op">(</span><span class="va">location</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>observation <span class="op">=</span> <span class="fu">stats</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/r/stats/convolve.html" class="external-link">convolve</a></span><span class="op">(</span><span class="va">observation</span>, <span class="fu"><a href="https://rdrr.io/r/base/rev.html" class="external-link">rev</a></span><span class="op">(</span><span class="va">true_los</span><span class="op">)</span>,</span>
-<span>                                       type <span class="op">=</span> <span class="st">"open"</span><span class="op">)</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/seq.html" class="external-link">seq_along</a></span><span class="op">(</span><span class="va">observation</span><span class="op">)</span><span class="op">]</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/group_by.html" class="external-link">ungroup</a></span><span class="op">(</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">scores_by_los</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://purrr.tidyverse.org/reference/imap.html" class="external-link">imap</a></span><span class="op">(</span><span class="va">los_specs</span>, \<span class="op">(</span><span class="va">los</span>, <span class="va">name</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu"><a href="../reference/fcast_census.html">fcast_census</a></span><span class="op">(</span><span class="va">flu_forecast</span>, <span class="va">los</span>, <span class="va">flu_history</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>    <span class="fu"><a href="../reference/score_census.html">score_census</a></span><span class="op">(</span>truth <span class="op">=</span> <span class="va">observed_census</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>    <span class="fu"><a href="https://dplyr.tidyverse.org/reference/mutate.html" class="external-link">mutate</a></span><span class="op">(</span>los <span class="op">=</span> <span class="va">name</span><span class="op">)</span></span>
-<span><span class="op">}</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://dplyr.tidyverse.org/reference/bind_rows.html" class="external-link">bind_rows</a></span><span class="op">(</span><span class="op">)</span></span>
-<span></span>
-<span><span class="va">scores_by_los</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="https://dplyr.tidyverse.org/reference/summarise.html" class="external-link">summarise</a></span><span class="op">(</span><span class="fu"><a href="https://dplyr.tidyverse.org/reference/across.html" class="external-link">across</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">overprediction</span>, <span class="va">underprediction</span>, <span class="va">dispersion</span><span class="op">)</span>, <span class="va">mean</span><span class="op">)</span>,</span>
-<span>            .by <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">los</span>, <span class="va">horizon</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="https://tidyr.tidyverse.org/reference/pivot_longer.html" class="external-link">pivot_longer</a></span><span class="op">(</span><span class="op">-</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">los</span>, <span class="va">horizon</span><span class="op">)</span>, names_to <span class="op">=</span> <span class="st">"component"</span>, values_to <span class="op">=</span> <span class="st">"wis"</span><span class="op">)</span> <span class="op">|&gt;</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span><span class="va">horizon</span>, <span class="va">wis</span>, fill <span class="op">=</span> <span class="va">component</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_bar.html" class="external-link">geom_col</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/facet_wrap.html" class="external-link">facet_wrap</a></span><span class="op">(</span><span class="op">~</span> <span class="va">los</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_brewer.html" class="external-link">scale_fill_brewer</a></span><span class="op">(</span>palette <span class="op">=</span> <span class="st">"Set2"</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>x <span class="op">=</span> <span class="st">"Horizon (weeks)"</span>, y <span class="op">=</span> <span class="st">"Mean WIS"</span><span class="op">)</span> <span class="op">+</span></span>
-<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_classic</a></span><span class="op">(</span><span class="op">)</span></span></code></pre></div>
-<p><img src="censcast_files/figure-html/scoring-1.png" class="r-plt" alt="" width="672"></p>
+<p><code>census_history</code> (or its real equivalent) you supply from
+your own records.</p>
 </div>
 <div class="section level2">
 <h2 id="api">API<a class="anchor" aria-label="anchor" href="#api"></a>
@@ -201,20 +232,25 @@ you bring your own. It needs the standard hubverse target-data columns:
 </tr></thead>
 <tbody>
 <tr class="odd">
-<td><code><a href="../reference/los_spec.html">los_spec()</a></code></td>
-<td>Build a LOS survival vector.</td>
+<td><code><a href="../reference/spec_los.html">spec_los()</a></code></td>
+<td>LOS survival vector from priors.</td>
 </tr>
 <tr class="even">
-<td><code><a href="../reference/fcast_census.html">fcast_census()</a></code></td>
-<td>Convolve hubverse admissions × LOS → hubverse census.</td>
+<td><code><a href="../reference/fit_los.html">fit_los()</a></code></td>
+<td>LOS survival vector fit from <code>(admissions, census)</code>.</td>
 </tr>
 <tr class="odd">
+<td><code><a href="../reference/fcast_census.html">fcast_census()</a></code></td>
+<td>Convolve admissions × LOS → census, hubverse shape in/out.</td>
+</tr>
+<tr class="even">
 <td><code><a href="../reference/plot_fan.html">plot_fan()</a></code></td>
 <td>Quantile fan chart, returns a <code>ggplot</code>.</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code><a href="../reference/score_census.html">score_census()</a></code></td>
-<td>Score against observed census via <code>scoringutils</code>.</td>
+<td>Score census forecast against truth via
+<code>scoringutils</code>.</td>
 </tr>
 </tbody>
 </table>
